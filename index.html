@@ -1,0 +1,189 @@
+<!doctype html>
+<html>
+  <body>
+    <canvas id="scene"></canvas>
+    <style>
+      * { padding:0; margin:0; outline:none; border:0; }
+    </style>
+    <script>
+      var RagdollTest = function() {
+        var self = this;
+
+        self.Points = [];
+        self.Constraints = [];
+
+        var meshWidth = 30;
+        var meshHeight = 30;
+
+        self.Init = function() {
+          for(var y = 0; y < meshHeight; y++) {
+            for(var x = 0; x < meshWidth; x++) {
+              self.Points.push(new Vector2(x * 20, y * 20));
+
+              if(x != 0 && y != 0) {
+                var currentPoint = self.Points[y * meshWidth + x];
+                var leftPoint = self.Points[y * meshWidth + x - 1];
+                var upperPoint = self.Points[(y - 1) * meshWidth + x];
+
+                self.Constraints.push(
+                  new Constraints.Distance(
+                    currentPoint, leftPoint
+                  )
+                );
+
+                self.Constraints.push(
+                  new Constraints.Distance(
+                    currentPoint, upperPoint
+                  )
+                );
+              }
+            }
+          }
+        }
+
+        self.Update = function() {
+          for(var i = 0; i < self.Constraints.length; i++) {
+            var constraint = self.Constraints[i];
+            constraint.Relax();
+          }
+        }
+
+        self.Render = function(context) {
+          context.fillStyle = "#fff";
+          context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+          context.fillStyle = "#000";
+
+          for(var i = 0; i < self.Points.length; i++) {
+            var point = self.Points[i];
+            context.fillRect(point.x, point.y, 2, 2);
+          }
+
+          for(var i = 0; i < this.Constraints.length; i++) {
+            var constraint = this.Constraints[i];
+
+            context.strokeStyle = "#f00";
+            context.beginPath();
+            context.moveTo(constraint.Point1.x, constraint.Point1.y);
+            context.lineTo(constraint.Point2.x, constraint.Point2.y);
+            context.stroke();
+            context.closePath();
+          }
+        }
+
+        self.OnCanvasClicked = function(e) {
+          var clickPosition = new Vector2(e.x, e.y);
+
+          for(var i = 0; i < self.Points.length; i++) {
+            var point = self.Points[i];
+            var clickDistance = point.Sub(clickPosition).LengthSqr();
+            if(clickDistance < 2500) {
+              point.MutableAdd(
+                new Vector2(
+                  Math.random() * 50.0 - 25.0 | 0,
+                  Math.random() * 50.0 - 25.0 | 0
+                )
+              );
+            }
+          }
+        }
+      }
+
+      var Vector2 = function(x, y) {
+        this.x = x;
+        this.y = y;
+
+        this.Add = function(other) {
+          return new Vector2(this.x + other.x, this.y + other.y);
+        }
+
+        this.Sub = function(other) {
+          return new Vector2(this.x - other.x, this.y - other.y);
+        }
+
+        this.MutableAdd = function(other) {
+          this.x += other.x;
+          this.y += other.y;
+        }
+
+        this.MutableSub = function(other) {
+          this.x -= other.x;
+          this.y -= other.y;
+        }
+
+        this.Mult = function(other) {
+          return new Vector2(this.x * other.x, this.y * other.y);
+        }
+
+        this.Div = function(other) {
+          return new Vector2(this.x / other.x, this.y / other.y);
+        }
+
+        this.Dot = function(other) {
+          return this.x * other.x + this.y * other.y;
+        }
+
+        this.Cross = function(other) {
+          return this.x * other.y - this.y * other.x;
+        }
+
+        this.Scale = function(scalar) {
+          return new Vector2(this.x * scalar, this.y * scalar);
+        }
+
+        this.LengthSqr = function() {
+          return this.Dot(this);
+        }
+
+        this.Length = function() {
+          return Math.sqrt(this.LengthSqr());
+        }
+      }
+
+      var Constraints = {
+        Distance: function(v1, v2) {
+          this.InitialDistance = v2.Sub(v1).Length();
+          this.Point1 = v1;
+          this.Point2 = v2;
+
+          this.Relax = function() {
+            var currentDistance = this.Point2.Sub(this.Point1);
+            var currentDistanceLengthSqr = currentDistance.LengthSqr();
+            var scaleFactorOfInitialDistance = (
+              this.InitialDistance * this.InitialDistance - currentDistanceLengthSqr
+            ) / currentDistanceLengthSqr;
+            var distanceNormal = currentDistance.Scale(scaleFactorOfInitialDistance);
+            this.Point1.MutableSub(distanceNormal);
+            this.Point2.MutableAdd(distanceNormal);
+          }
+        },
+
+        /*
+        TODO
+        Angle: function() {
+        },
+
+        Pin: function() {
+        }
+        */
+      };
+
+      (function() {
+        var rdTest = new RagdollTest();
+        var canvas = document.getElementById('scene');
+        var context = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        rdTest.Init();
+
+        canvas.onclick = rdTest.OnCanvasClicked;
+
+        setInterval(function() {
+          rdTest.Update();
+          rdTest.Render(context);
+        }, 17);
+      })();
+    </script>
+  </body>
+</html>
