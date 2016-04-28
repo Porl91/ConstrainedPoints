@@ -11,6 +11,7 @@
 
         self.Points = [];
         self.Constraints = [];
+        self.Particles = [];
 
         var meshWidth = 30;
         var meshHeight = 30;
@@ -18,33 +19,37 @@
         self.Init = function() {
           for(var y = 0; y < meshHeight; y++) {
             for(var x = 0; x < meshWidth; x++) {
-              self.Points.push(new Vector2(x * 20, y * 20));
+              var point = new Vector2(x * 20, y * 20);
+              self.Points.push(point);
+              self.Particles.push(new Particle(point));
 
-              if(x != 0 && y != 0) {
-                var currentPoint = self.Points[y * meshWidth + x];
+              var currentPoint = self.Points[y * meshWidth + x];
+              if(x != 0) {
                 var leftPoint = self.Points[y * meshWidth + x - 1];
-                var upperPoint = self.Points[(y - 1) * meshWidth + x];
-
                 self.Constraints.push(
-                  new Constraints.Distance(
-                    currentPoint, leftPoint
-                  )
+                  new Constraints.Distance(currentPoint, leftPoint)
                 );
+              }
 
+              if(y != 0) {
+                var upperPoint = self.Points[(y - 1) * meshWidth + x];
                 self.Constraints.push(
-                  new Constraints.Distance(
-                    currentPoint, upperPoint
-                  )
+                  new Constraints.Distance(currentPoint, upperPoint)
                 );
               }
             }
           }
         }
 
-        self.Update = function() {
+        self.Update = function(mouseState) {
+          self.HandleMouseEvents(mouseState);
+          for(var i = 0; i < this.Particles.length; i++) {
+            this.Particles[i].Update();
+          }
+          var recip = 1.0 / 16.0;
           for(var i = 0; i < self.Constraints.length; i++) {
             var constraint = self.Constraints[i];
-            constraint.Relax();
+            constraint.Relax(recip);
           }
         }
 
@@ -70,21 +75,31 @@
           }
         }
 
-        self.OnCanvasClicked = function(e) {
-          var clickPosition = new Vector2(e.x, e.y);
+        self.HandleMouseEvents = function(mouseState) {
+          var clickPosition = new Vector2(mouseState.xMouse, mouseState.yMouse);
 
-          for(var i = 0; i < self.Points.length; i++) {
-            var point = self.Points[i];
-            var clickDistance = point.Sub(clickPosition).LengthSqr();
-            if(clickDistance < 2500) {
-              point.MutableAdd(
-                new Vector2(
-                  Math.random() * 50.0 - 25.0 | 0,
-                  Math.random() * 50.0 - 25.0 | 0
-                )
-              );
+          if(mouseState.isDown) {
+            for(var i = 0; i < self.Points.length; i++) {
+              var point = self.Points[i];
+              var clickDistance = point.Sub(clickPosition).LengthSqr();
+              if(clickDistance < 2500) {
+                point.x = clickPosition.x;
+                point.y = clickPosition.y;
+              }
             }
           }
+        }
+      }
+
+      var Particle = function(position) {
+        this.Position = position;
+        this.Velocity = new Vector2(0, 0);
+        this.Acceleration = new Vector2(0, 0);
+
+        this.Update = function() {
+          this.Acceleration = new Vector2(0, 0.001);
+          this.Velocity.MutableAdd(this.Acceleration);
+          this.Position.MutableAdd(this.Velocity);
         }
       }
 
@@ -137,34 +152,37 @@
         this.Length = function() {
           return Math.sqrt(this.LengthSqr());
         }
+
+        this.Normal = function() {
+          var recip = 1.0 / this.Length();
+          return new Vector2(this.x * recip, this.y * recip);
+        }
       }
 
       var Constraints = {
         Distance: function(v1, v2) {
-          this.InitialDistance = v2.Sub(v1).Length();
           this.Point1 = v1;
           this.Point2 = v2;
+          this.InitialDistance = this.Point2.Sub(this.Point1).Length();
 
-          this.Relax = function() {
+          this.Relax = function(recipStep) {
             var currentDistance = this.Point2.Sub(this.Point1);
             var currentDistanceLengthSqr = currentDistance.LengthSqr();
             var scaleFactorOfInitialDistance = (
               this.InitialDistance * this.InitialDistance - currentDistanceLengthSqr
-            ) / currentDistanceLengthSqr;
+            ) / currentDistanceLengthSqr * 2.5 * recipStep;
             var distanceNormal = currentDistance.Scale(scaleFactorOfInitialDistance);
             this.Point1.MutableSub(distanceNormal);
             this.Point2.MutableAdd(distanceNormal);
           }
         },
 
-        /*
-        TODO
+        /*TODO
         Angle: function() {
         },
 
         Pin: function() {
-        }
-        */
+        }*/
       };
 
       (function() {
@@ -177,12 +195,21 @@
 
         rdTest.Init();
 
-        canvas.onclick = rdTest.OnCanvasClicked;
+        var mouseState = { isDown: false, xMouse: 0, yMouse: 0 }
+        window.onmousedown = window.onmouseup = window.onmousemove = function(e) {
+          mouseState.isDown = e.type == 'mousedown' || (mouseState.isDown && e.type == 'mousemove');
+          mouseState.xMouse = e.x;
+          mouseState.yMouse = e.y;
+        }
 
-        setInterval(function() {
-          rdTest.Update();
+        var loopCallback = function() {
+          rdTest.Update(mouseState);
           rdTest.Render(context);
-        }, 17);
+        }
+
+        loopCallback();
+
+        setInterval(loopCallback, 17);
       })();
     </script>
   </body>
